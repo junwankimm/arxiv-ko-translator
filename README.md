@@ -17,8 +17,21 @@ MT service — and the model is selectable per run.
   - `researcher` (default) — keep standard ML terms in English inline (attention, gradient,
     fine-tuning, baseline…); translate only the connective prose. Built for fast skimming.
   - `beginner` — translate terms into Korean with English in parentheses on first mention.
+  In researcher mode the **structural scaffolding stays English** too — section titles,
+  the paper title, and float labels/cross-refs ("Table 3", "Fig. 2") — so it reads like the
+  original with Korean prose woven in. Beginner mode localizes those.
 - **Selectable Claude model** — translation subagents inherit your session model by default;
   say "use opus" / "use sonnet" / "use haiku" to override.
+- **Appendix excluded by default** — detects the appendix/supplementary/bibliography boundary
+  and leaves it untranslated to save tokens ("include the appendix" to override).
+- **Table-layout safe** — by default table cells are left in English (only captions
+  translated) so Hangul reflow doesn't break column widths ("translate table contents" to override).
+- **Layout QA pass** — renders the compiled PDF and visually checks for figures/tables that
+  drifted or overlap text after EN→KO reflow, then applies targeted LaTeX fixes (best-effort).
+- **Font fidelity** — only Hangul fonts are added; the paper's original Latin/math fonts and
+  document class are preserved, so it keeps the arXiv/ML-paper look.
+- **Parallel translation** — section files (or split chunks of a single big file) are
+  translated concurrently; per-file diffs run inside subagents, so the chat shows progress, not walls of diff.
 - **Korean PDF** via XeLaTeX + `kotex` (Nanum / Apple fonts, or Docker fallback).
 - **Auto-cleanup** — deletes the LaTeX source after a verified PDF build (`KEEP_SOURCE` to opt out).
 - **Optional Korean technical report** — "also write a technical report".
@@ -49,7 +62,12 @@ Just ask, in English or Korean:
 translate https://arxiv.org/abs/2310.06825 to Korean
 translate 2310.06825 for beginners, also write a technical report
 translate https://arxiv.org/pdf/2310.06825 to Korean using opus, keep the tex source
+translate 2310.06825 to Korean, include the appendix, translate table contents
+translate 2310.06825 to Korean, skip layout check
 ```
+
+Defaults: researcher level · inherit session model · appendix excluded · table cells kept in
+English · layout-QA on · source deleted after a verified PDF build.
 
 Output lands in `arXiv_<ID>/`:
 - `arXiv_<ID>/<ID>_ko.pdf` — the Korean PDF (always kept)
@@ -61,6 +79,13 @@ Output lands in `arXiv_<ID>/`:
 - **XeLaTeX with `kotex`** (`tlmgr install kotex cjk-ko`), **or Docker**
   (`ghcr.io/xu-cheng/texlive-debian`, which ships Nanum fonts).
 - `wget` and `tar` for fetching the source.
+
+### Optional (for the Layout-QA pass)
+None are mandatory — the skill uses whichever it finds, and can fall back to reading the PDF
+directly. Any **one** of: `pdftoppm`/`pdftocairo` (poppler), `sips` (macOS built-in),
+`magick` (ImageMagick), or `gs` (Ghostscript). Because nothing here is a hard dependency,
+**publishing is unaffected** — Claude Code plugins can't install system packages anyway, so
+the skill is written to degrade gracefully and the optional tools are just documented here.
 
 ## Publishing this plugin
 

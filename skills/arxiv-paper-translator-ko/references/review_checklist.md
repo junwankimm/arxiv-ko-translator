@@ -49,12 +49,25 @@ done
 - [ ] Acronyms handled per mode (researcher: keep; beginner: expand once)
 - [ ] Model names / proper nouns kept English in both modes
 
-## 6. Coverage spot-check
-- [ ] `\title{...}` / `\icmltitle{...}` translated
-- [ ] All section/subsection titles translated
-- [ ] Figure/table captions translated
+## 6. Coverage & scope spot-check
+- [ ] `\title{...}` / `\icmltitle{...}` left in **English** (both modes — never translated)
+- [ ] Section/subsection titles: **researcher** → kept English; **beginner** → translated
+- [ ] Float labels & cross-refs (Figure/Table/Algorithm "Table 3", "Fig. 2"): **researcher**
+      → kept English (no `\figurename`/cleveref localization); **beginner** → localized
+- [ ] Figure/table caption *text* translated (both modes)
 - [ ] `\footnote{...}` / `\thanks{...}` translated
 - [ ] Code blocks (`lstlisting`/`minted`/`verbatim`) left in English (only captions translated)
+- [ ] **Tables** (`TABLES=keep`, default): cell contents left in English, only `\caption` translated
+- [ ] **Appendix** (`APPENDIX=exclude`, default): content from the appendix/bibliography
+      boundary onward left verbatim (NOT translated); boundary was detected correctly
+- [ ] Float placement specifiers, `\includegraphics` sizes, `minipage` widths unchanged
+
+## 9. Layout QA (after compile, `LAYOUT_QA=on`)
+- [ ] PDF rendered to images and visually inspected
+- [ ] No figure/table overlapping text, no content past margins
+- [ ] Floats near their references (no large drift), `minipage`/side-by-side intact
+- [ ] Captions stay with their floats
+- [ ] Any unresolved layout issues reported to the user (not silently ignored)
 
 ## 7. Template hard-coded labels
 ```bash

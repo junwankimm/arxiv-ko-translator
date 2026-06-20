@@ -36,6 +36,19 @@ re-decoding unfamiliar Korean calques of standard terms.
 - Translate only the **connective prose, verbs, and logical glue** into Korean.
 - Do **not** invent Korean for a term just to avoid English. If in doubt, keep English.
 - Proper nouns / model names always stay English (BERT, ResNet, LLaMA, Adam).
+- **Keep the structural scaffolding in English** (researcher mode):
+  - **Section/subsection titles** stay English: `\section{Introduction}` stays
+    `\section{Introduction}` (not `서론`), `\subsection{Related Work}` unchanged, etc.
+    Researchers navigate faster by the familiar English headings.
+  - **Float name labels** stay English: keep `Figure`, `Table`, `Algorithm`, `Section`,
+    `Equation` — do **not** localize to 그림/표/알고리즘. (i.e. skip the `\figurename`/
+    `\tablename` renames and the Korean `cleveref` names — see korean_support.md.)
+  - **Cross-references stay as the paper wrote them**: `Table 3`, `Tab. 3`, `Fig. 2`,
+    `Section 4`, `Eq. (5)` — translate the surrounding sentence but leave the reference
+    phrasing and `\cref`/`\ref` output untouched.
+  - The paper's `\title{...}` also stays English in researcher mode.
+  - Still translated in researcher mode: body prose, caption *text* (the descriptive part,
+    not the auto "Figure N:" prefix), footnotes.
 
 **Example (researcher):**
 ```latex
@@ -56,6 +69,9 @@ Goal: approachable for students / non-specialists.
   then use the Korean form afterward.
 - Acronyms: first mention `한국어 (Full Name, ABBR)`, then `ABBR`.
 - Still keep universally-untranslated names (model names, proper nouns) in English.
+- **Localize the structural scaffolding**: translate section/subsection titles to Korean and
+  localize float labels (그림/표/알고리즘) and `cleveref` names. (This is the opposite of
+  researcher mode.) **Exception:** the paper `\title{...}` stays English even here.
 
 **Example (beginner):**
 ```latex
@@ -101,20 +117,27 @@ multiple fields, prefer the dominant field's conventions and stay consistent.
 
 ## What to Translate
 
-### ✅ Always translate
-1. **Body prose** — paragraphs, sentences (Korean sentence structure + particles, both modes)
-2. **Titles** — `\title{...}`, `\section{...}`, `\subsection{...}`, `\icmltitle{...}`
-3. **Captions** — `\caption{...}`, table/algorithm titles
-4. **Reader notes** — `\footnote{...}`, `\thanks{...}`, margin notes
-5. **Hard-coded template labels** in `.sty`/`.cls` — `Abstract`, `Equal contribution`,
-   `Correspondence to:`, `Preprint`, `Under review`. Override with `\renewcommand` or edit
-   the copied template directly.
+### ✅ Always translate (both modes)
+1. **Body prose** — paragraphs, sentences (Korean sentence structure + particles)
+2. **Caption text** — the descriptive prose in `\caption{...}` (not the auto "Figure N:" prefix)
+3. **Reader notes** — `\footnote{...}`, `\thanks{...}`, margin notes
+
+### ✋ Never translate the paper title (both modes)
+- **`\title{...}` / `\icmltitle{...}`** stays in the original English in *all* modes. The
+  title identifies the paper; keep it verbatim. (Optionally add a Korean gloss as a
+  `%` comment, never in the rendered title.)
+
+### ↕ Translate in beginner mode only (kept English in researcher mode)
+- **Section titles** — `\section{...}`, `\subsection{...}`, `\subsubsection{...}`
+- **Float name labels & cross-ref words** — Figure/Table/Algorithm/Section/Equation
+- **Hard-coded template labels** in `.sty`/`.cls` — `Abstract`, `Equal contribution`,
+  `Correspondence to:`, `Preprint`, `Under review`. (In researcher mode keep them English;
+  `Equal contribution`-type author notes may still be localized if you wish — minor.)
 
 ```latex
-% Before
-\section{Introduction}
-% After (both modes — heading words are everyday Korean)
-\section{서론}
+% \section{Introduction}
+%   researcher →  \section{Introduction}     (unchanged)
+%   beginner   →  \section{서론}
 ```
 
 ### ❌ Never translate
@@ -144,13 +167,34 @@ Keep the math, translate around it. Add a particle after the math:
 % After:   손실 함수(loss function) $\mathcal{L}$은 오차를 측정한다.  (beginner)
 ```
 
-### Tables
-Translate descriptive headers and narrative cells; keep numeric data and units.
+### Tables (default `TABLES=keep`: do NOT translate cell contents)
+Hangul is wider than Latin and reflows differently, so translating cells routinely breaks
+column widths and alignment. **By default, leave everything inside `tabular`/`array`/`tabularx`
+untouched — including header cells — and translate only the table `\caption`.**
 ```latex
-% header row, researcher mode:
-Method & Accuracy & Latency \\   →   Method & 정확도 & Latency \\
-% (numbers/units like 95.2\%, 10ms unchanged)
+% default (TABLES=keep): cells stay English, caption translated
+\begin{tabular}{lcc}
+Method & Accuracy & Latency \\   % ← unchanged
+Ours   & 95.2\%   & 10ms    \\
+\end{tabular}
+\caption{ImageNet에서의 성능 비교}   % ← translated
 ```
+Only when the user sets `TABLES=translate` do you translate descriptive headers/narrative
+cells (keep numbers/units), and then re-check the layout in the Layout-QA step.
+
+### Layout-affecting content (figures, minipages, floats)
+EN→KO reflow can move floats and squeeze `minipage`/`wrapfigure`/inline layouts. **Do not
+change float placement specifiers, `\includegraphics` sizes, or `minipage` widths during
+translation** — translate only the human-readable text (captions, surrounding prose). Layout
+repair is a separate, deliberate step (SKILL Step 5.5 Layout QA), done by viewing the
+rendered PDF — not something to guess at while translating.
+
+### Appendix / supplementary (default excluded)
+When `APPENDIX=exclude` (default), do not translate content from the appendix boundary
+onward (`\appendix`, `\section*{Appendix}`, `\appendices`, or the bibliography) — leave it
+**verbatim in English**. It still compiles and `\ref`/`\cite`/`\appendix` references still
+resolve; this just saves translation tokens. Translate the appendix only if `APPENDIX=include`.
+Never translate bibliography entries themselves.
 
 ### Custom macros + Hangul (CRITICAL for compilation)
 A custom macro immediately followed by a Hangul syllable must be separated with `{}`,

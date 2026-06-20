@@ -15,7 +15,12 @@ LEVEL = [researcher | beginner]
 - researcher 모드(기본): 해당 분야에서 통용되는 전문 용어는 **영어 그대로** 둡니다. 용어 집합은
   논문의 분야(ML, 통계, 시스템, 물리, 생물, 수학 등)에 맞춰 위 "핵심 용어표"를 따릅니다(ML에 한정 X).
   예시(ML): attention, transformer, embedding, gradient, fine-tuning, loss, baseline,
-  benchmark, token, inference, ablation, representation 등. 한국어 조사를 영어 단어에 직접 붙입니다(예: "attention을", "gradient의",
+  benchmark, token, inference, ablation, representation 등.
+  또한 researcher 모드에서는 **구조적 요소를 영어로 유지**합니다:
+  - 섹션/서브섹션 제목(`\section{Introduction}` → 그대로), 논문 `\title`
+  - float 라벨(Figure/Table/Algorithm/Section/Equation) 및 본문 내 상호참조 표기
+    (Table 3, Tab. 3, Fig. 2, Section 4 등)는 원문 그대로
+  - 번역 대상: 본문 문장, caption의 서술 텍스트, footnote 한국어 조사를 영어 단어에 직접 붙입니다(예: "attention을", "gradient의",
   "transformer는"). 문장 구조·동사·접속어만 한국어로 번역합니다. 표준 용어를 억지로 한국어로
   바꾸지 마세요. 애매하면 영어로 둡니다. 약어는 그대로 두되 1회에 한해 펼쳐 쓸 수 있습니다
   (예: state-of-the-art (SOTA), 이후 SOTA).
@@ -41,6 +46,11 @@ LEVEL = [researcher | beginner]
 - 수식: `$...$`, `\[...\]`, `equation`/`align` 등 환경 내부
 - LaTeX 명령·환경: `\section`, `\label`, `\ref`, `\cite`, `\includegraphics`, `\input` 등
 - 코드 블록: `lstlisting`/`minted`/`verbatim` 내부 (단 `caption`은 번역)
+- **표 내부**(`tabular`/`array`/`tabularx`)는 기본적으로 **번역하지 않음**(헤더 셀 포함).
+  레이아웃(열 너비/정렬)이 한글 reflow로 깨지기 때문. 표는 `\caption`만 번역.
+  (단, TABLES=translate가 지정된 경우에만 셀 내용 번역 — 수치/단위는 유지)
+- figure/`minipage`/float의 배치 지정자, `\includegraphics` 크기, `minipage` 폭은 변경 금지
+  (텍스트만 번역). 레이아웃 수정은 별도 단계에서 수행.
 - 표의 원시 데이터(수치, AI 대화, traceback, 코드), 단위(ms, GB, Hz)
 - 파일 경로, URL(`\url`, `\href`의 대상), 고유명사·모델명·저자명
 
@@ -50,8 +60,10 @@ LEVEL = [researcher | beginner]
   kotex에서 한글은 catcode-letter라 분리하지 않으면 정의되지 않은 명령으로 파싱됩니다.
 
 ### 3. 번역 대상
-- 본문 문장, 섹션/서브섹션 제목, 그림·표 caption, `\footnote`/`\thanks`, 템플릿의
-  하드코딩 영어 라벨(Abstract, Equal contribution 등).
+- 항상 번역: 본문 문장, 그림·표 caption의 서술 텍스트, `\footnote`/`\thanks`.
+- 논문 제목 `\title{...}`/`\icmltitle{...}`은 **두 모드 모두 영어 원문 유지**(번역하지 않음).
+- 섹션/서브섹션 제목, float 라벨, 템플릿 하드코딩 라벨(Abstract 등): **beginner 모드에서만** 번역.
+  researcher 모드에서는 영어 유지.
 
 ### 4. 한국어 문체
 - 평서체 `~한다/~이다`로 통일. 핵심 기여는 "제안한다", 개요는 "설명한다/소개한다".

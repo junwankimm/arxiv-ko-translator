@@ -16,6 +16,9 @@ content while preserving structure, compiling a Korean PDF with `kotex`, and the
 |-----------|--------|---------|----------------------|
 | `LEVEL` | `researcher` \| `beginner` | `researcher` | "for beginners", "초보자용", "researcher level", "skim mode" |
 | `MODEL` | a Claude model id, or *inherit* | *inherit session* | "use opus", "translate with sonnet", "use haiku" |
+| `APPENDIX` | `exclude` \| `include` | `exclude` | "include the appendix", "부록도 번역" |
+| `TABLES` | `keep` \| `translate` | `keep` | "translate table contents too" |
+| `LAYOUT_QA` | `on` \| `off` | `on` | "skip layout check", "don't do layout QA" |
 | `KEEP_SOURCE` | `true` \| `false` | `false` | "keep the tex source", "don't delete source" |
 | `REPORT` | `true` \| `false` | `false` | "also write a technical report", "기술 리포트도" |
 
@@ -27,8 +30,17 @@ content while preserving structure, compiling a Korean PDF with `kotex`, and the
   they inherit the current session's model. If the user names a model, pass it as the
   `model` argument when dispatching each translation Task (Agent tool `model` field:
   `opus`, `sonnet`, or `haiku`).
+- **APPENDIX** `exclude` (default) skips translating everything from the appendix /
+  supplementary boundary onward (and the bibliography) — those are kept **verbatim in
+  English** so the document still compiles and refs resolve, but no translation tokens are
+  spent on them. See Step 2.3 for boundary detection.
+- **TABLES** `keep` (default) leaves the contents of `tabular`/`array` cells in English and
+  translates only the table `\caption`. This protects column widths/alignment from Hangul
+  reflow. `translate` opts into translating cell text.
+- **LAYOUT_QA** `on` (default) renders the compiled PDF and visually checks for
+  layout damage caused by EN→KO reflow (see Step 5.5).
 - Announce the resolved parameters once at the start, e.g.:
-  `> Translating 2310.06825 — level=researcher, model=inherit(session), delete source after compile.`
+  `> Translating 2310.06825 — level=researcher, model=inherit(session), appendix=excluded, tables=keep, layout-QA=on, delete source after compile.`
 
 ## Workflow Overview
 1. **Resolve ID & Download** — Parse the arXiv ID from any input form; fetch LaTeX source
@@ -111,22 +123,79 @@ Before ANY translation, extract:
 
 Read [references/translation_prompt.md](references/translation_prompt.md) for the prompt template.
 
-### 2.3 Identify files to translate
+### 2.3 Determine the translation scope (main file + appendix boundary)
+
 ```bash
 # Main file (contains \documentclass)
 find paper_ko/ -name "*.tex" -exec grep -l '\\documentclass' {} \; | head -1
 ```
-- Translate the **main file first** (sequential) to establish shared terminology.
-- Then the section files: **3+ files → dispatch in parallel**; 1–2 → sequential.
 
-### 2.4 Dispatch Translation Tasks
+**Appendix / supplementary boundary** (when `APPENDIX=exclude`, default). Papers vary, so
+detect the boundary using the strongest signal present, in this priority order:
+1. The `\appendix` macro — everything **after** it is appendix. Most reliable.
+2. `\section{Appendix}` / `\section*{Appendix}` / `\section*{Supplementary...}` /
+   `\appendices` (IEEE) — boundary at that line.
+3. The bibliography — `\bibliography{...}`, `\begin{thebibliography}`, or `\printbibliography`.
+   Everything from References onward is not narrative to translate anyway.
+4. Separate appendix **files** included via `\input{}`/`\include{}` whose names match
+   `appendix*`, `supp*`, `supplement*`, `appendices*` — exclude those files wholesale.
+
+```bash
+# Locate the boundary marker in the main file:
+grep -nE '\\appendix\b|\\appendices\b|\\section\*?\{(Appendix|Appendices|Supplement)' paper_ko/<main>.tex
+grep -nE '\\(bibliography|printbibliography)\b|\\begin\{thebibliography\}' paper_ko/<main>.tex
+```
+
+- If a boundary is found, **translate only the content before it**; leave everything from the
+  boundary onward (appendix + bibliography) **unchanged/verbatim**. The document still
+  compiles and all `\ref`/`\cite`/`\appendix` references still resolve.
+- If you cannot confidently locate a boundary, **state that and translate the whole body**
+  (safer than silently dropping main-text sections). Mention it in the start-of-run summary.
+- `APPENDIX=include` → translate the appendix too (still never the bibliography entries).
+
+**Scope summary to print:** e.g. `Body: sections 1–6 (intro.tex … conclusion.tex). Appendix A–C + references: kept in English (excluded).`
+
+### 2.4 Dispatch Translation Tasks — parallel, edits inside subagents
+
+**Always do the edits inside translation subagents, not in the main thread.** This both
+(a) parallelizes and (b) keeps the per-file Edit diffs out of your main view — the
+orchestrator only prints short progress lines (see "Progress vs. diffs" below).
+
+**Ordering & parallelism:**
+1. **Main file first, sequentially** — it seeds the shared terminology table. (If the main
+   file is mostly `\input{}`s with little prose, this is quick.)
+2. **All remaining in-scope section files → dispatch in parallel** in a *single message*
+   with multiple Agent calls (not one-at-a-time). This is the main speed lever.
+3. **Single-file paper** (all body text in one big `.tex`, 3+ sections): optionally split to
+   parallelize — see 2.5.
 
 **Each translation Task:**
 - Agent tool, `subagent_type: general-purpose`
 - **`model`**: if the user set `MODEL`, pass it (`opus`/`sonnet`/`haiku`); otherwise omit to inherit the session model.
-- Input: one `.tex` file path under `paper_ko/`
-- Action: Read file → translate → write back (Edit)
-- Must follow [references/translation_prompt.md](references/translation_prompt.md) and use the gathered context (title, abstract, structure, terminology, **and the resolved `LEVEL`**).
+- Input: one in-scope `.tex` file (or chunk) path under `paper_ko/`
+- Action: Read → translate → write back (Edit), all within the subagent
+- Must follow [references/translation_prompt.md](references/translation_prompt.md) and use the gathered context (title, abstract, structure, terminology, **resolved `LEVEL`**, **`TABLES` policy**, and which trailing portion is the excluded appendix).
+
+**Progress vs. diffs:** report progress as one line per file/chunk — e.g.
+`✅ Methods (3/7) · ⏳ Experiments …`. Do **not** paste translated `.tex` content or diffs
+into the conversation. (Diffs produced *inside* a subagent are not streamed to the main
+view, so routing all edits through subagents is what suppresses them. The orchestrator's
+own messages stay at the progress-line level.)
+
+### 2.5 (Optional) Split a single large file to parallelize
+
+Only when the body is one big `.tex` with several top-level sections and translation feels slow:
+
+1. Keep the preamble (everything up to and including `\begin{document}`, plus title/abstract)
+   as `chunk_00`; translate it first (terminology seed).
+2. Split the body at top-level `\section{` boundaries into `chunk_01.tex`, `chunk_02.tex`, …
+   (stop at the appendix boundary from 2.3 — excluded part stays in a final untranslated chunk).
+3. Translate `chunk_01..N` **in parallel** (one subagent each), then concatenate the chunks
+   back in original order into the file and **diff against the original line count / structure**
+   to confirm nothing was dropped or reordered.
+4. Risk to watch: terminology drift across chunks (mitigated by the shared terminology table)
+   and split/reassembly errors. If reassembly doesn't verify cleanly, fall back to translating
+   the file as a single Task. Don't split files under ~3 sections — overhead isn't worth it.
 
 ## Step 3: Review Translation
 
@@ -150,14 +219,28 @@ Follow [references/korean_support.md](references/korean_support.md) to configure
 \setsanshangulfont{Apple SD Gothic Neo}
 \setmonohangulfont{D2Coding}
 ```
-And localize float labels:
-```latex
-\renewcommand{\figurename}{그림}
-\renewcommand{\tablename}{표}
-\renewcommand{\abstractname}{초록}
-\renewcommand{\refname}{참고문헌}
-\renewcommand{\contentsname}{목차}
-```
+
+**Preserve the original arXiv/ML-paper look (font fidelity):** set **only the Hangul**
+fonts above. **Do NOT** set `\setmainfont`/`\setsansfont` — leaving them unset keeps the
+paper's original Latin/math fonts (NeurIPS/ICML Times, Computer Modern, etc.), so English
+text and equations render exactly as in the original. Keep the paper's own `\documentclass`
+and Latin font packages (`times`, `newtxtext`, …); only **remove `\usepackage[T1]{fontenc}`**
+(incompatible with XeLaTeX). Pick a Hangul font that matches the body: a **Myeongjo** (serif,
+e.g. `AppleMyungjo` / Docker `NanumMyeongjo`) for the usual serif ML body; a Gothic only if
+the paper's body is sans. See [references/korean_support.md](references/korean_support.md) § Font fidelity.
+**Float labels & section titles are LEVEL-dependent:**
+- `LEVEL=researcher` (default): **keep them English.** Do *not* localize — leave
+  `Figure`/`Table`/`Algorithm`/`References`/`Abstract` and all `\section{...}` titles in
+  English so "Table 3"/"Fig. 2" cross-references read as in the original. (Section titles
+  are simply left untranslated during Step 2.)
+- `LEVEL=beginner`: localize the labels (and section titles are translated in Step 2):
+  ```latex
+  \renewcommand{\figurename}{그림}
+  \renewcommand{\tablename}{표}
+  \renewcommand{\abstractname}{초록}
+  \renewcommand{\refname}{참고문헌}
+  \renewcommand{\contentsname}{목차}
+  ```
 
 ## Step 5: Compile the Korean PDF
 
@@ -176,6 +259,40 @@ docker run --rm -v "$(pwd)/paper_ko":/workspace -w /workspace \
   latexmk -xelatex -interaction=nonstopmode main.tex
 ```
 Fix compile errors and recompile until a PDF is produced. See Common Issues.
+
+Also scan the compile log for layout warnings:
+```bash
+grep -nE 'Overfull \\hbox|Overfull \\vbox|Float too large|LaTeX Warning: .*float' paper_ko/<main>.log | head
+```
+
+## Step 5.5: Layout QA (when `LAYOUT_QA=on`, default)
+
+EN→KO reflow changes line breaks and paragraph lengths, which can push floats (figures/
+tables) to odd spots, overlap text, or squeeze `minipage`/`wrapfigure`/inline layouts. Do a
+**visual** pass — log warnings alone don't catch misplacement.
+
+1. Render the PDF pages to images (use the first available tool):
+   ```bash
+   cd arXiv_${ARXIV_ID}/paper_ko
+   pdftoppm -png -r 110 <main>.pdf qa_page        # poppler  → qa_page-01.png, ...
+   # fallbacks: pdftocairo -png -r 110 <main>.pdf qa_page   |   sips -s format png <main>.pdf --out qa_page.png   |   magick -density 110 <main>.pdf qa_page.png
+   ```
+2. **Read** the `qa_page-*.png` images (Read tool reads images) — or Read the PDF directly
+   via the Read tool's `pages` param — and look for: figures/tables overlapping text,
+   captions split from floats, content past margins, a float dumped pages away from its
+   reference, broken `minipage`/side-by-side figures.
+3. Apply **targeted** LaTeX fixes and recompile, e.g.:
+   - Float drifting: tighten placement `[t]`/`[h]`, add `\FloatBarrier` (needs `placeins`)
+     before the next section, or `\clearpage`.
+   - Overlap/overfull: shrink with `\resizebox{\linewidth}{!}{...}`, reduce `\includegraphics`
+     `width`, or relax `minipage` widths (`0.48\linewidth` → `0.46\linewidth`).
+   - Caption split: wrap the float so caption and graphic stay together.
+4. Re-render and re-check the affected pages. Iterate a few times.
+
+**Honest limitation:** this is best-effort QA, not a guarantee. Common float drift and
+overfull boxes are fixable this way; pathological hand-tuned layouts (tightly packed
+multi-`minipage` grids, absolute positioning) may still need manual touch-up. Report any
+pages you couldn't fully resolve rather than claiming perfect layout.
 
 ## Step 6: Generate Technical Report (only if `REPORT=true`)
 
