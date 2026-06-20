@@ -1,0 +1,35 @@
+# Makefile for XeLaTeX + kotex (Korean) compilation
+# Usage:
+#   make pdf       - Compile PDF with bibliography
+#   make draft     - Quick single-pass compile
+#   make clean     - Remove auxiliary files
+#   make distclean - Remove all generated files including PDF
+
+MAIN  = main
+LATEX = xelatex -interaction=nonstopmode
+BIBTEX = bibtex
+
+.DEFAULT_GOAL := pdf
+
+pdf: $(MAIN).tex
+	$(LATEX) $(MAIN).tex
+	-$(BIBTEX) $(MAIN)
+	$(LATEX) $(MAIN).tex
+	$(LATEX) $(MAIN).tex
+
+draft: $(MAIN).tex
+	$(LATEX) $(MAIN).tex
+
+clean:
+	rm -f *.aux *.log *.out *.bbl *.blg *.toc *.lof *.lot *.fls *.fdb_latexmk
+	rm -f *.synctex.gz *.brf *.nav *.snm *.vrb
+
+distclean: clean
+	rm -f $(MAIN).pdf
+
+help:
+	@echo "Targets: pdf (default), draft, clean, distclean"
+	@echo "Docker:  docker run --rm -v \$$(pwd):/workspace -w /workspace \\"
+	@echo "           ghcr.1ms.run/xu-cheng/texlive-debian:20260101 make pdf"
+
+.PHONY: pdf draft clean distclean help
