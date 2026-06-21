@@ -65,8 +65,11 @@ docker --version
 ```
 Recommended image (Nanum Korean fonts preinstalled): `ghcr.io/xu-cheng/texlive-debian` (mirror: `ghcr.1ms.run/xu-cheng/texlive-debian`).
 
-**If neither local XeLaTeX nor Docker is available, STOP** and ask:
-"XeLaTeX (with kotex) or Docker is required to compile the Korean PDF. Which do you want to use? I'll help set it up."
+**If local XeLaTeX/`kotex` is missing**, run the companion **`arxiv-ko-setup`** skill — it
+installs XeLaTeX + kotex + Korean fonts without Docker (BasicTeX + `collection-langkorean`),
+handling the sudo steps via the `!` prefix. Only if the user has neither local TeX nor a
+willingness to install it should you fall back to Docker, or STOP and ask:
+"XeLaTeX (with kotex) is required to compile the Korean PDF. Run the `arxiv-ko-setup` skill to install it (no Docker), or use Docker — which do you prefer?"
 
 ## Step 1: Resolve arXiv ID and Download Source
 

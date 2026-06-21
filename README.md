@@ -76,9 +76,23 @@ Output lands in `arXiv_<ID>/`:
 
 ## Requirements
 
-- **XeLaTeX with `kotex`** (`tlmgr install kotex cjk-ko`), **or Docker**
-  (`ghcr.io/xu-cheng/texlive-debian`, which ships Nanum fonts).
+- **XeLaTeX with `kotex`** + a Korean font. Don't have it? Run the bundled **`arxiv-ko-setup`**
+  skill — it installs everything **without Docker** (BasicTeX + `collection-langkorean`) and
+  walks you through the one `sudo` step. Docker (`ghcr.io/xu-cheng/texlive-debian`) is only a
+  fallback for users who'd rather not install TeX locally.
 - `wget` and `tar` for fetching the source.
+
+### One-time setup (no Docker)
+A plugin can't auto-install system packages on `/plugin install`, so dependency setup is an
+explicit, consented step. Either run the `arxiv-ko-setup` skill ("set up arxiv-ko-translator"),
+or do it by hand on macOS:
+```bash
+brew install --cask basictex
+eval "$(/usr/libexec/path_helper)"
+sudo tlmgr update --self
+sudo tlmgr install collection-langkorean latexmk xetex
+```
+(Linux: `sudo apt-get install texlive-xetex texlive-lang-korean texlive-latex-extra latexmk fonts-nanum`.)
 
 ### Optional (for the Layout-QA pass)
 None are mandatory — the skill uses whichever it finds, and can fall back to reading the PDF
