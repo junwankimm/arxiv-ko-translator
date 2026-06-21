@@ -25,36 +25,40 @@ fonts alone:
   (`AppleMyungjo`, Docker `NanumMyeongjo`). Use a Gothic Hangul only if the paper's body is sans.
 - Set Hangul fonts with the **Hangul-specific** setters below, which do not touch Latin/math.
 
-## 2. Hangul fonts
+## 2. Hangul fonts — detect, never hardcode
 
-`kotex` exposes Hangul-specific font setters that don't disturb the Latin/math fonts:
+`kotex` exposes Hangul-specific setters that don't disturb the Latin/math fonts:
 ```latex
 \setmainhangulfont{<serif/myeongjo>}    % body text
 \setsanshangulfont{<sans/gothic>}       % headings, \textsf
-\setmonohangulfont{<mono>}              % \texttt, code
+\setmonohangulfont{<mono>}              % \texttt, code  (optional)
 ```
 
-### Option A — Local compile (this macOS machine; fonts confirmed present)
-```latex
-\setmainhangulfont{AppleMyungjo}
-\setsanshangulfont{Apple SD Gothic Neo}
-\setmonohangulfont{D2Coding}
-```
-List installed Korean fonts to pick alternatives:
-```bash
-fc-list :lang=ko family | sort -u
-```
-Alternatives available here: `NanumSquare Neo`, `S-Core Dream`. Korean fonts have no true
-italic — kotex maps emphasis sensibly; no extra config needed.
+**Always pick from what `fc-list :lang=ko family | sort -u` reports.** Priority lists
+(first present wins):
+- main: `NanumMyeongjo` → `UnBatang` → `AppleMyungjo` → `Apple SD Gothic Neo`
+- sans: `NanumGothic` → `NanumBarunGothic` → `Apple SD Gothic Neo` → `AppleGothic`
+- mono: `D2Coding` → `NanumGothicCoding` → *(omit; falls back to sans)*
 
-### Option B — Docker (`xu-cheng/texlive-debian`, Nanum preinstalled)
-```latex
-\setmainhangulfont{NanumMyeongjo}
-\setsanshangulfont{NanumGothic}
-\setmonohangulfont{NanumGothicCoding}
-```
-If you don't set fonts at all, `kotex` falls back to its bundled defaults (UnBatang/UnDotum),
-which also compile — explicit fonts just look better.
+**Zero-config fallback:** if none of those are installed, **set no Hangul font at all** —
+`\usepackage{kotex}` renders Hangul with its built-in default, so the document still compiles.
+Only ever name a font you confirmed with `fc-list`.
+
+> **Important — which fonts a new user actually has, and what we install:**
+> - We do **not** bundle or ship a font. We use whatever is **already on the system**.
+> - **macOS**: `AppleMyungjo`, `Apple SD Gothic Neo`, `AppleGothic` are **built into macOS** —
+>   every Mac has them, nothing to install. (`D2Coding` is third-party — treat as optional mono.)
+> - **Linux**: `arxiv-ko-setup` installs `fonts-nanum` (fontconfig-visible) → `NanumMyeongjo`/
+>   `NanumGothic` become available.
+> - **Caveat:** the Nanum that TeX's `collection-langkorean` installs is **Type1**
+>   (`nanumtype1`), usable by kotex's *pdfTeX/Type1* path but **NOT callable by name from
+>   XeLaTeX/fontspec**. So on a bare BasicTeX macOS box, `\setmainhangulfont{NanumMyeongjo}`
+>   may fail — which is exactly why we detect with `fc-list` and fall back to Apple fonts or
+>   the kotex default.
+> - **Docker** (`xu-cheng/texlive-debian`): ships Nanum as *system* fonts, so `NanumMyeongjo`
+>   etc. are fontconfig-visible there.
+
+Korean fonts have no true italic — kotex maps emphasis sensibly; no extra config needed.
 
 ## 3. Localize float / section labels — **beginner mode only**
 

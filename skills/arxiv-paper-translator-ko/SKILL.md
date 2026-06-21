@@ -51,25 +51,25 @@ content while preserving structure, compiling a Korean PDF with `kotex`, and the
 6. **Report (optional)** — Korean technical summary
 7. **Cleanup** — Move the PDF out, then **delete the LaTeX source** (unless `KEEP_SOURCE`)
 
-## Prerequisites
+## Prerequisites — trust the one-time sentinel (don't re-probe every run)
 
-Check for a local XeLaTeX install (required for Korean via `kotex`):
+Dependency installation is handled **once** by the `arxiv-ko-setup` skill, which writes a
+sentinel on success. This skill should **not** re-run a full dependency probe on every
+translation — just check the sentinel:
+
 ```bash
-xelatex --version && kpsewhich kotex.sty
+SENTINEL="${XDG_CACHE_HOME:-$HOME/.cache}/arxiv-ko-translator/deps-ok"
+if [ -f "$SENTINEL" ]; then echo "deps OK (verified $(cat "$SENTINEL"))"; else echo "NO-SENTINEL"; fi
 ```
-If `kotex.sty` is missing, install it: `tlmgr install kotex cjk-ko` (TeX Live), or use Docker.
 
-If XeLaTeX is not installed locally, check Docker:
-```bash
-docker --version
-```
-Recommended image (Nanum Korean fonts preinstalled): `ghcr.io/xu-cheng/texlive-debian` (mirror: `ghcr.1ms.run/xu-cheng/texlive-debian`).
+- **Sentinel present** → assume the toolchain is ready and proceed straight to Step 1. (If a
+  compile later fails for a missing-package reason, only *then* fall back to a check.)
+- **Sentinel absent** (first-ever run on this machine) → do **not** silently install. Tell the
+  user once and hand off:
+  "First run — I need XeLaTeX + kotex + a Korean font. Run the **`arxiv-ko-setup`** skill once
+  (installs without Docker), then I'll continue." Offer to invoke `arxiv-ko-setup` now.
 
-**If local XeLaTeX/`kotex` is missing**, run the companion **`arxiv-ko-setup`** skill — it
-installs XeLaTeX + kotex + Korean fonts without Docker (BasicTeX + `collection-langkorean`),
-handling the sudo steps via the `!` prefix. Only if the user has neither local TeX nor a
-willingness to install it should you fall back to Docker, or STOP and ask:
-"XeLaTeX (with kotex) is required to compile the Korean PDF. Run the `arxiv-ko-setup` skill to install it (no Docker), or use Docker — which do you prefer?"
+This keeps every normal run check-free; setup is the single place that verifies/installs.
 
 ## Step 1: Resolve arXiv ID and Download Source
 
@@ -214,14 +214,29 @@ After all Tasks complete, review per [references/review_checklist.md](references
 
 ## Step 4: Add Korean Support
 
-Follow [references/korean_support.md](references/korean_support.md) to configure `kotex`, Hangul fonts, and localized labels. Core preamble (XeLaTeX):
+Follow [references/korean_support.md](references/korean_support.md) to configure `kotex`, Hangul fonts, and localized labels.
+
+**Pick Hangul fonts by runtime detection — do NOT hardcode** (a hardcoded family may be
+absent on another machine and break the build). First see what's actually installed:
+```bash
+fc-list :lang=ko family | sort -u
+```
+Then choose the first present family from each priority list (these are fontconfig-visible
+across platforms / macOS built-ins):
+- main (serif/myeongjo): `NanumMyeongjo` → `UnBatang` → `AppleMyungjo` → `Apple SD Gothic Neo`
+- sans (gothic): `NanumGothic` → `NanumBarunGothic` → `Apple SD Gothic Neo` → `AppleGothic`
+- mono (optional): `D2Coding` → `NanumGothicCoding` → *(skip if none — fall back to the sans)*
+
 ```latex
 \usepackage{kotex}
-% Local macOS fonts (this machine has these). For Docker, prefer Nanum (see korean_support.md).
-\setmainhangulfont{AppleMyungjo}
-\setsanshangulfont{Apple SD Gothic Neo}
-\setmonohangulfont{D2Coding}
+\setmainhangulfont{<first available main>}
+\setsanshangulfont{<first available sans>}
+% set mono only if a Korean mono font exists; otherwise omit this line
 ```
+**If none of the named families are present, omit the `\set*hangulfont` lines entirely** —
+`\usepackage{kotex}` alone renders Hangul with its built-in default font, so the build still
+succeeds. (Verified: kotex-only compiles Korean on XeLaTeX.) Never set a font you didn't
+confirm with `fc-list`.
 
 **Preserve the original arXiv/ML-paper look (font fidelity):** set **only the Hangul**
 fonts above. **Do NOT** set `\setmainfont`/`\setsansfont` — leaving them unset keeps the

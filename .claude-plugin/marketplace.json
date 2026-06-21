@@ -10,7 +10,7 @@
     {
       "name": "arxiv-ko-translator",
       "description": "Translate arXiv papers into Korean: fetch LaTeX source, translate prose while preserving equations/commands, compile a Korean PDF with kotex, then delete the bulky source. Researcher/beginner vocabulary knob; selectable Claude model.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "source": "./",
       "category": "productivity",
       "tags": [
@@ -23,5 +23,5 @@
       ]
     }
   ],
-  "version": "0.2.0"
+  "version": "0.3.0"
 }
