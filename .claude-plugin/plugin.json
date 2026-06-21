@@ -1,6 +1,6 @@
 {
   "name": "arxiv-ko-translator",
-  "version": "0.3.1",
+  "version": "0.1.0",
   "description": "Translate arXiv papers from English to Korean by fetching the LaTeX source, translating narrative content while preserving equations/commands, compiling a Korean PDF with kotex, and deleting the bulky source afterward. Vocabulary level is tunable (researcher = keep ML terms in English; beginner = translate with glosses). Uses Claude itself for translation; the model is selectable per run.",
   "author": {
     "name": "Junwan Kim",
