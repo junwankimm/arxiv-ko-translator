@@ -9,6 +9,24 @@ code**, compiles a Korean PDF with `kotex`, and then **deletes the bulky LaTeX s
 The translation is done by **Claude itself** (via translation subagents) — no external
 MT service — and the model is selectable per run.
 
+## What's in the plugin
+
+Two skills:
+
+| Skill | Purpose |
+|-------|---------|
+| `arxiv-paper-translator-ko` | The translator. Ask it to translate a paper. |
+| `arxiv-ko-setup` | One-time, Docker-free dependency installer + doctor (XeLaTeX, kotex, fonts). Writes a sentinel so the translator never re-probes. |
+
+## How it works
+
+1. **Plan / scope** — resolve knobs, download & extract the LaTeX source, gather title/abstract/
+   structure, infer the field, and detect the appendix boundary (excluded by default).
+2. **Translate** — main file first (seeds terminology), then section files in **parallel**
+   subagents; equations, commands, refs, and code are copied verbatim.
+3. **Assemble & verify** — review pass → add `kotex` + Hangul fonts → compile → **Layout-QA**
+   (render the PDF, fix float/overlap damage) → optional Korean report → **delete the source**.
+
 ## Features
 
 - **Input flexibility** — arXiv ID (`2310.06825`), `arxiv.org/abs/...`, or `arxiv.org/pdf/...`.
@@ -50,8 +68,22 @@ MT service — and the model is selectable per run.
 /plugin install arxiv-ko-translator@arxiv-ko-translator
 ```
 
-Then restart Claude Code (or run `/plugin` to confirm it loaded). The skill
-`arxiv-paper-translator-ko` becomes available.
+Then restart Claude Code (or run `/plugin` to confirm it loaded). The skills
+`arxiv-paper-translator-ko` and `arxiv-ko-setup` become available.
+
+**First run:** the translator checks once for XeLaTeX + `kotex` + a Korean font. If they're
+missing it hands off to `arxiv-ko-setup` (see Requirements). After a successful setup a
+sentinel is written, so **subsequent runs never re-check** dependencies.
+
+### Updating after you edit the repo
+Installs are **cached snapshots**, not live — edits to the repo aren't picked up until you
+refresh and bump the version in `.claude-plugin/*.json`:
+```
+/plugin marketplace update arxiv-ko-translator
+/plugin install arxiv-ko-translator@arxiv-ko-translator
+```
+then restart. (Or, for live-editing during development, symlink the skill folder into
+`~/.claude/skills/` instead of installing as a plugin.)
 
 ## Usage
 
@@ -84,8 +116,8 @@ Output lands in `arXiv_<ID>/`:
 
 ### One-time setup (no Docker)
 A plugin can't auto-install system packages on `/plugin install`, so dependency setup is an
-explicit, consented step. Either run the `arxiv-ko-setup` skill ("set up arxiv-ko-translator"),
-or do it by hand on macOS:
+explicit, consented step — run it **once** ("set up arxiv-ko-translator"). The `arxiv-ko-setup`
+skill diagnoses, installs, smoke-tests a Korean compile, and writes the sentinel. By hand on macOS:
 ```bash
 brew install --cask basictex
 eval "$(/usr/libexec/path_helper)"
@@ -93,6 +125,12 @@ sudo tlmgr update --self
 sudo tlmgr install collection-langkorean latexmk xetex
 ```
 (Linux: `sudo apt-get install texlive-xetex texlive-lang-korean texlive-latex-extra latexmk fonts-nanum`.)
+
+**Why `sudo`?** System TeX installs into a root-owned dir. To avoid it entirely, the setup
+skill also offers a **no-sudo, user-tree TeX Live** install into `~/texlive` (longer first
+install, no admin rights). **Fonts:** nothing is bundled — macOS uses its built-in Apple
+Korean fonts, Linux uses `fonts-nanum`, and `kotex`'s default backs everyone up; the
+translator picks an available font via `fc-list` at runtime.
 
 ### Optional (for the Layout-QA pass)
 None are mandatory — the skill uses whichever it finds, and can fall back to reading the PDF
@@ -104,13 +142,14 @@ the skill is written to degrade gracefully and the optional tools are just docum
 ## Publishing this plugin
 
 This repo is **both** a Claude Code plugin and a single-plugin marketplace
-(`.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json`). To publish:
+(`.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json`). It's already a git repo.
+To publish:
 
-1. `git init && git add -A && git commit -m "arxiv-ko-translator"`
-2. Create a public GitHub repo and push.
-3. Others install with:
+1. Create a public GitHub repo and push (`git remote add origin … && git push -u origin main`).
+2. Others install with:
    `/plugin marketplace add <username>/arxiv-ko-translator` then
    `/plugin install arxiv-ko-translator@arxiv-ko-translator`.
+3. For each release, bump `version` in both `.claude-plugin/*.json` so users' updates are detected.
 
 Optionally list it on a community index (e.g. claudemarketplaces.com) by pointing it at
 the GitHub repo. No npm publish is needed — Claude Code plugins are distributed via git

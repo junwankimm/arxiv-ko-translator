@@ -80,23 +80,35 @@ Accept **any** of these input forms and extract `ARXIV_ID`:
 - Old-style ID: `cs/0309040`
 
 ```bash
-# Extract the ID from any of the forms above (strip URL, .pdf, abs/pdf path).
+# Extract the ID from any of the forms above: optional scheme/www, strip abs|pdf path,
+# trailing .pdf, query/fragment, and surrounding whitespace.
 RAW="<user input>"
-ARXIV_ID=$(printf '%s' "$RAW" | sed -E 's#https?://arxiv\.org/(abs|pdf)/##; s#\.pdf$##' | tr -d ' ')
-echo "ARXIV_ID=${ARXIV_ID}"
+ARXIV_ID=$(printf '%s' "$RAW" | sed -E 's#^[[:space:]]+|[[:space:]]+$##g; s#^(https?://)?(www\.)?arxiv\.org/(abs|pdf)/##; s#\.pdf$##; s#[?#].*$##')
+# Filesystem-safe name (old-style IDs like cs/0309040 contain a slash). Keep ARXIV_ID
+# (with the slash) for the download URL; use SAFE_ID for all paths.
+SAFE_ID=$(printf '%s' "$ARXIV_ID" | tr '/' '_')
+echo "ARXIV_ID=${ARXIV_ID}  SAFE_ID=${SAFE_ID}"
 
-mkdir -p arXiv_${ARXIV_ID}
+mkdir -p "arXiv_${SAFE_ID}/paper_source"
 # arXiv e-print endpoint returns the LaTeX source tarball regardless of abs/pdf input.
-wget -q "https://arxiv.org/e-print/${ARXIV_ID}" -O arXiv_${ARXIV_ID}/paper_source.tar.gz
-mkdir -p arXiv_${ARXIV_ID}/paper_source
-tar -xzf arXiv_${ARXIV_ID}/paper_source.tar.gz -C arXiv_${ARXIV_ID}/paper_source
+wget -q "https://arxiv.org/e-print/${ARXIV_ID}" -O "arXiv_${SAFE_ID}/paper_source.tar.gz"
+# Robust extraction: handle tar.gz, plain tar, or a single gzipped .tex.
+if tar -tzf "arXiv_${SAFE_ID}/paper_source.tar.gz" >/dev/null 2>&1; then
+  tar -xzf "arXiv_${SAFE_ID}/paper_source.tar.gz" -C "arXiv_${SAFE_ID}/paper_source"
+elif tar -tf "arXiv_${SAFE_ID}/paper_source.tar.gz" >/dev/null 2>&1; then
+  tar -xf "arXiv_${SAFE_ID}/paper_source.tar.gz" -C "arXiv_${SAFE_ID}/paper_source"
+else
+  # single gzipped .tex (not a tar) — see Common Issues
+  gunzip -c "arXiv_${SAFE_ID}/paper_source.tar.gz" > "arXiv_${SAFE_ID}/paper_source/main.tex"
+fi
 ```
 
 **Verify extraction:**
 ```bash
-ls -R arXiv_${ARXIV_ID}/paper_source
+ls -R "arXiv_${SAFE_ID}/paper_source"
 ```
-If the download is a single `.tex` file (not a tarball), see Common Issues below.
+From here, **all paths use `arXiv_${SAFE_ID}`**; the download URL above is the only place that
+uses `ARXIV_ID` with its slash.
 
 ## Step 2: Translate LaTeX Files
 
@@ -104,7 +116,7 @@ If the download is a single `.tex` file (not a tarball), see Common Issues below
 
 ### 2.1 Copy source → `paper_ko/`
 ```bash
-cd arXiv_${ARXIV_ID}
+cd arXiv_${SAFE_ID}
 mkdir -p paper_ko
 rsync -a paper_source/ paper_ko/   # or: cp -r paper_source/* paper_ko/
 ```
@@ -264,14 +276,14 @@ the paper's body is sans. See [references/korean_support.md](references/korean_s
 
 ### Option 1 — Local XeLaTeX (preferred; this machine supports it)
 ```bash
-cd arXiv_${ARXIV_ID}/paper_ko
+cd arXiv_${SAFE_ID}/paper_ko
 latexmk -xelatex -interaction=nonstopmode main.tex   # main = actual main filename
 # or manually: xelatex → bibtex → xelatex → xelatex
 ```
 
 ### Option 2 — Docker (Nanum fonts preinstalled)
 ```bash
-cd arXiv_${ARXIV_ID}
+cd arXiv_${SAFE_ID}
 docker run --rm -v "$(pwd)/paper_ko":/workspace -w /workspace \
   ghcr.1ms.run/xu-cheng/texlive-debian:20260101 \
   latexmk -xelatex -interaction=nonstopmode main.tex
@@ -291,7 +303,7 @@ tables) to odd spots, overlap text, or squeeze `minipage`/`wrapfigure`/inline la
 
 1. Render the PDF pages to images (use the first available tool):
    ```bash
-   cd arXiv_${ARXIV_ID}/paper_ko
+   cd arXiv_${SAFE_ID}/paper_ko
    pdftoppm -png -r 110 <main>.pdf qa_page        # poppler  → qa_page-01.png, ...
    # fallbacks: pdftocairo -png -r 110 <main>.pdf qa_page   |   sips -s format png <main>.pdf --out qa_page.png   |   magick -density 110 <main>.pdf qa_page.png
    ```
@@ -314,19 +326,19 @@ pages you couldn't fully resolve rather than claiming perfect layout.
 
 ## Step 6: Generate Technical Report (only if `REPORT=true`)
 
-Spawn a subagent following [references/summary_prompt.md](references/summary_prompt.md), writing into [assets/report_template.md](assets/report_template.md). Save to `arXiv_${ARXIV_ID}/technical_report_ko.md`. The report is written in Korean, honoring the same `LEVEL` knob.
+Spawn a subagent following [references/summary_prompt.md](references/summary_prompt.md), writing into [assets/report_template.md](assets/report_template.md). Save to `arXiv_${SAFE_ID}/technical_report_ko.md`. The report is written in Korean, honoring the same `LEVEL` knob.
 
 ## Step 7: Cleanup — Delete the LaTeX Source
 
 This is a headline feature: the LaTeX source is large and disposable once the PDF exists.
 
 ```bash
-cd arXiv_${ARXIV_ID}
+cd arXiv_${SAFE_ID}
 MAIN=main   # actual main filename (without .tex)
 # 1) Preserve the compiled PDF at the top level.
-cp "paper_ko/${MAIN}.pdf" "./${ARXIV_ID}_ko.pdf"
+cp "paper_ko/${MAIN}.pdf" "./${SAFE_ID}_ko.pdf"
 # 2) Verify the PDF exists and is non-empty BEFORE deleting anything.
-test -s "./${ARXIV_ID}_ko.pdf" || { echo "PDF missing/empty — NOT deleting source"; exit 1; }
+test -s "./${SAFE_ID}_ko.pdf" || { echo "PDF missing/empty — NOT deleting source"; exit 1; }
 # 3) Delete the bulky source.
 rm -rf paper_source paper_source.tar.gz paper_ko
 ```
@@ -339,8 +351,8 @@ rm -rf paper_source paper_source.tar.gz paper_ko
 
 ## Final Deliverables
 
-- **Korean PDF**: `arXiv_${ARXIV_ID}/${ARXIV_ID}_ko.pdf`
-- **Technical report** (if requested): `arXiv_${ARXIV_ID}/technical_report_ko.md`
+- **Korean PDF**: `arXiv_${SAFE_ID}/${SAFE_ID}_ko.pdf`
+- **Technical report** (if requested): `arXiv_${SAFE_ID}/technical_report_ko.md`
 - LaTeX source: deleted by default (kept under `paper_ko/` only if `KEEP_SOURCE=true`)
 
 ## Common Issues & Solutions

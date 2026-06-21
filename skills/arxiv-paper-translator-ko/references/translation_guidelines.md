@@ -46,7 +46,7 @@ re-decoding unfamiliar Korean calques of standard terms.
   - **Cross-references stay as the paper wrote them**: `Table 3`, `Tab. 3`, `Fig. 2`,
     `Section 4`, `Eq. (5)` — translate the surrounding sentence but leave the reference
     phrasing and `\cref`/`\ref` output untouched.
-  - The paper's `\title{...}` also stays English in researcher mode.
+  - The paper's `\title{...}` stays English (in *both* modes — see "Never translate the paper title" below).
   - Still translated in researcher mode: body prose, caption *text* (the descriptive part,
     not the auto "Figure N:" prefix), footnotes.
 
